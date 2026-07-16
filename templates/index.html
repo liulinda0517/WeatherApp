@@ -71,6 +71,48 @@
             <button type="button" class="save-favorite-btn" id="saveFavoriteBtn" onclick="saveFavorite('{{ weather.city }}')">
               ★ Save City
             </button>
+
+            {% if air_quality %}
+              <div class="air-quality-section">
+                <div class="aqi-header">
+                  <p class="eyebrow">Air Quality</p>
+                  <div class="aqi-badge" style="background-color: {{ air_quality.aqi_color }};">
+                    <span class="aqi-level">AQI {{ air_quality.aqi_level }}</span>
+                    <span class="aqi-label">{{ air_quality.aqi_label }}</span>
+                  </div>
+                </div>
+                <p class="aqi-advice">{{ air_quality.aqi_advice }}</p>
+
+                <button type="button" class="aqi-toggle-btn" onclick="togglePollutants()">
+                  <span class="toggle-icon">▼</span> Pollutant Details
+                </button>
+
+                <div class="pollutants-details" id="pollutantsDetails" style="display: none;">
+                  <div class="pollutants-grid">
+                    <div class="pollutant-item">
+                      <span class="pollutant-label">PM2.5</span>
+                      <strong class="pollutant-value">{{ air_quality.pm25 }}</strong>
+                      <span class="pollutant-unit">µg/m³</span>
+                    </div>
+                    <div class="pollutant-item">
+                      <span class="pollutant-label">PM10</span>
+                      <strong class="pollutant-value">{{ air_quality.pm10 }}</strong>
+                      <span class="pollutant-unit">µg/m³</span>
+                    </div>
+                    <div class="pollutant-item">
+                      <span class="pollutant-label">O₃</span>
+                      <strong class="pollutant-value">{{ air_quality.o3 }}</strong>
+                      <span class="pollutant-unit">µg/m³</span>
+                    </div>
+                    <div class="pollutant-item">
+                      <span class="pollutant-label">NO₂</span>
+                      <strong class="pollutant-value">{{ air_quality.no2 }}</strong>
+                      <span class="pollutant-unit">µg/m³</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            {% endif %}
           </article>
 
           {% if forecast %}
@@ -191,6 +233,20 @@
         } else {
           saveBtn.classList.remove("favorited");
           saveBtn.textContent = "★ Save City";
+        }
+      }
+
+      function togglePollutants() {
+        const details = document.getElementById("pollutantsDetails");
+        const btn = event.currentTarget;
+        const icon = btn.querySelector(".toggle-icon");
+        
+        if (details.style.display === "none") {
+          details.style.display = "block";
+          icon.textContent = "▲";
+        } else {
+          details.style.display = "none";
+          icon.textContent = "▼";
         }
       }
 

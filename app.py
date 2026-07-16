@@ -8,6 +8,7 @@ app = Flask(__name__)
 API_KEY = os.getenv("OPENWEATHER_API_KEY", "")
 BASE_URL = "https://api.openweathermap.org/data/2.5/weather"
 FORECAST_BASE_URL = "https://api.openweathermap.org/data/2.5/forecast"
+AIR_POLLUTION_BASE_URL = "https://api.openweathermap.org/data/2.5/air_pollution"
 
 
 def get_weather(city: str, units: str = "metric"):
@@ -51,6 +52,8 @@ def get_weather(city: str, units: str = "metric"):
         "pressure": main.get("pressure"),
         "unit_symbol": selected_units["label"],
         "wind_unit": selected_units["wind"],
+        "lat": data.get("coord", {}).get("lat"),
+        "lon": data.get("coord", {}).get("lon"),
     }
 
 
@@ -113,10 +116,58 @@ def get_forecast(city: str, units: str = "metric"):
     return forecast_list
 
 
+def get_air_quality(lat: float, lon: float):
+    """Fetch air quality data including AQI and pollutants."""
+    if not API_KEY:
+        raise RuntimeError("Missing OpenWeather API key.")
+
+    # AQI level mapping (1-5)
+    aqi_mapping = {
+        1: {"label": "Good", "color": "#22c55e", "advice": "Air quality is satisfactory."},
+        2: {"label": "Fair", "color": "#eab308", "advice": "Acceptable air quality for most."},
+        3: {"label": "Moderate", "color": "#f97316", "advice": "Sensitive groups may be affected."},
+        4: {"label": "Poor", "color": "#ef4444", "advice": "Everyone may be affected. Reduce outdoor activity."},
+        5: {"label": "Very Poor", "color": "#a855f7", "advice": "Avoid outdoor activity. Wear protection."},
+    }
+
+    params = {
+        "lat": lat,
+        "lon": lon,
+        "appid": API_KEY,
+    }
+
+    response = requests.get(AIR_POLLUTION_BASE_URL, params=params, timeout=10)
+    response.raise_for_status()
+    data = response.json()
+
+    if not data.get("list"):
+        raise ValueError("Unable to fetch air quality data.")
+
+    # Get the first (current) air quality data point
+    current = data["list"][0]
+    main = current.get("main", {})
+    components = current.get("components", {})
+
+    aqi_level = main.get("aqi", 3)  # Default to Moderate if not available
+    aqi_info = aqi_mapping.get(aqi_level, aqi_mapping[3])
+
+    return {
+        "aqi_level": aqi_level,
+        "aqi_label": aqi_info["label"],
+        "aqi_color": aqi_info["color"],
+        "aqi_advice": aqi_info["advice"],
+        "pm25": round(components.get("pm2_5", 0), 1),
+        "pm10": round(components.get("pm10", 0), 1),
+        "o3": round(components.get("o3", 0), 1),
+        "no2": round(components.get("no2", 0), 1),
+    }
+
+
 @app.route("/", methods=["GET", "POST"])
 def index():
     weather = None
     forecast = None
+    air_quality = None
     error = None
     city = ""
     units = "metric"
@@ -139,6 +190,15 @@ def index():
                     # Log forecast error but don't stop app - current weather still shows
                     print(f"Forecast error: {forecast_error}")
                     forecast = None
+                
+                # Fetch air quality only if coordinates available
+                if weather and weather.get("lat") and weather.get("lon"):
+                    try:
+                        air_quality = get_air_quality(weather["lat"], weather["lon"])
+                    except Exception as aqi_error:
+                        # Log AQI error but don't stop app - current weather still shows
+                        print(f"Air quality error: {aqi_error}")
+                        air_quality = None
             except requests.RequestException:
                 error = "Weather service is unavailable right now. Please try again later."
             except ValueError as exc:
@@ -146,7 +206,7 @@ def index():
             except RuntimeError as exc:
                 error = str(exc)
 
-    return render_template("index.html", weather=weather, forecast=forecast, city=city, error=error, units=units)
+    return render_template("index.html", weather=weather, forecast=forecast, air_quality=air_quality, city=city, error=error, units=units)
 
 
 if __name__ == "__main__":
