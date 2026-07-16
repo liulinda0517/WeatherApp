@@ -17,6 +17,12 @@
           </div>
         </div>
 
+        <!-- Favorites Section -->
+        <section class="favorites-section" id="favoritesSection" style="display: none;">
+          <p class="eyebrow">Favorite cities</p>
+          <div class="favorites-list" id="favoritesList"></div>
+        </section>
+
         <form method="post" class="search-bar">
           <input type="text" name="city" placeholder="Enter city" value="{{ city }}" required>
           <select name="units">
@@ -61,6 +67,10 @@
                 <strong>{{ weather.pressure }} hPa</strong>
               </div>
             </div>
+
+            <button type="button" class="save-favorite-btn" id="saveFavoriteBtn" onclick="saveFavorite('{{ weather.city }}')">
+              ★ Save City
+            </button>
           </article>
 
           {% if forecast %}
@@ -85,5 +95,114 @@
         {% endif %}
       </section>
     </main>
+
+    <script>
+      const FAVORITES_KEY = "weatherAppFavorites";
+      const MAX_FAVORITES = 10;
+
+      // Load and display favorites on page load
+      function initFavorites() {
+        loadFavorites();
+        updateSaveButtonState();
+      }
+
+      function getFavoritesFromStorage() {
+        const stored = localStorage.getItem(FAVORITES_KEY);
+        return stored ? JSON.parse(stored) : [];
+      }
+
+      function saveFavoritesToStorage(favorites) {
+        localStorage.setItem(FAVORITES_KEY, JSON.stringify(favorites));
+      }
+
+      function loadFavorites() {
+        const favorites = getFavoritesFromStorage();
+        const favoritesList = document.getElementById("favoritesList");
+        const favoritesSection = document.getElementById("favoritesSection");
+
+        if (favorites.length === 0) {
+          favoritesSection.style.display = "none";
+          return;
+        }
+
+        favoritesSection.style.display = "block";
+        favoritesList.innerHTML = "";
+
+        favorites.forEach((city) => {
+          const button = document.createElement("div");
+          button.className = "favorite-pill";
+          button.innerHTML = `
+            <span class="favorite-city" onclick="searchCity('${city}')">${city}</span>
+            <button type="button" class="favorite-delete" onclick="removeFavorite('${city}')" aria-label="Remove favorite">×</button>
+          `;
+          favoritesList.appendChild(button);
+        });
+      }
+
+      function saveFavorite(city) {
+        if (!city) return;
+
+        let favorites = getFavoritesFromStorage();
+
+        // Check if already favorited
+        if (favorites.includes(city)) {
+          removeFavorite(city);
+          return;
+        }
+
+        // Check max limit
+        if (favorites.length >= MAX_FAVORITES) {
+          alert(`Maximum ${MAX_FAVORITES} favorites reached. Remove one to add another.`);
+          return;
+        }
+
+        // Add to favorites
+        favorites.push(city);
+        saveFavoritesToStorage(favorites);
+        loadFavorites();
+        updateSaveButtonState();
+      }
+
+      function removeFavorite(city) {
+        let favorites = getFavoritesFromStorage();
+        favorites = favorites.filter((fav) => fav !== city);
+        saveFavoritesToStorage(favorites);
+        loadFavorites();
+        updateSaveButtonState();
+      }
+
+      function searchCity(city) {
+        const cityInput = document.querySelector('input[name="city"]');
+        cityInput.value = city;
+        cityInput.form.submit();
+      }
+
+      function updateSaveButtonState() {
+        const saveBtn = document.getElementById("saveFavoriteBtn");
+        if (!saveBtn) return;
+
+        const currentCity = saveBtn.getAttribute("data-city");
+        const favorites = getFavoritesFromStorage();
+        const isFavorited = favorites.includes(currentCity);
+
+        if (isFavorited) {
+          saveBtn.classList.add("favorited");
+          saveBtn.textContent = "★ Saved";
+        } else {
+          saveBtn.classList.remove("favorited");
+          saveBtn.textContent = "★ Save City";
+        }
+      }
+
+      // Set data-city attribute on save button when weather is displayed
+      document.addEventListener("DOMContentLoaded", function () {
+        const saveFavoriteBtn = document.getElementById("saveFavoriteBtn");
+        if (saveFavoriteBtn) {
+          const cityName = saveFavoriteBtn.getAttribute("onclick").match(/'([^']*)'/)[1];
+          saveFavoriteBtn.setAttribute("data-city", cityName);
+        }
+        initFavorites();
+      });
+    </script>
   </body>
 </html>
