@@ -1,11 +1,13 @@
 from flask import Flask, render_template, request
 import os
 import requests
+from datetime import datetime
 
 app = Flask(__name__)
 
 API_KEY = os.getenv("OPENWEATHER_API_KEY", "")
 BASE_URL = "https://api.openweathermap.org/data/2.5/weather"
+FORECAST_BASE_URL = "https://api.openweathermap.org/data/2.5/forecast"
 
 
 def get_weather(city: str, units: str = "metric"):
@@ -52,9 +54,69 @@ def get_weather(city: str, units: str = "metric"):
     }
 
 
+def get_forecast(city: str, units: str = "metric"):
+    """Fetch 5-day forecast and aggregate into daily summaries."""
+    if not API_KEY:
+        raise RuntimeError("Missing OpenWeather API key.")
+
+    params = {
+        "q": city,
+        "appid": API_KEY,
+        "units": units,
+    }
+
+    response = requests.get(FORECAST_BASE_URL, params=params, timeout=10)
+    response.raise_for_status()
+    data = response.json()
+
+    if data.get("cod") != "200":
+        raise ValueError("Unable to fetch forecast data.")
+
+    # Group forecasts by day (API returns 40 items of 3-hour forecasts = 5 days)
+    daily_forecasts = {}
+    
+    for item in data["list"]:
+        dt = datetime.fromtimestamp(item["dt"])
+        day_key = dt.strftime("%Y-%m-%d")
+        
+        if day_key not in daily_forecasts:
+            daily_forecasts[day_key] = {
+                "date": dt.strftime("%a, %b %d"),
+                "temps": [],
+                "conditions": [],
+                "icons": [],
+                "rain_chances": [],
+            }
+        
+        daily_forecasts[day_key]["temps"].append(item["main"]["temp"])
+        daily_forecasts[day_key]["rain_chances"].append(item.get("pop", 0) * 100)
+        
+        # Get primary weather condition
+        if item.get("weather"):
+            daily_forecasts[day_key]["conditions"].append(item["weather"][0]["description"])
+            daily_forecasts[day_key]["icons"].append(item["weather"][0]["icon"])
+
+    # Aggregate daily data
+    forecast_list = []
+    for day_key in sorted(daily_forecasts.keys())[:5]:  # Only first 5 days
+        day_data = daily_forecasts[day_key]
+        
+        forecast_list.append({
+            "date": day_data["date"],
+            "high_temp": round(max(day_data["temps"])),
+            "low_temp": round(min(day_data["temps"])),
+            "condition": day_data["conditions"][0].title() if day_data["conditions"] else "Unknown",
+            "icon": day_data["icons"][0] if day_data["icons"] else "01d",
+            "precipitation": round(sum(day_data["rain_chances"]) / len(day_data["rain_chances"])),
+        })
+
+    return forecast_list
+
+
 @app.route("/", methods=["GET", "POST"])
 def index():
     weather = None
+    forecast = None
     error = None
     city = ""
     units = "metric"
@@ -70,6 +132,13 @@ def index():
         else:
             try:
                 weather = get_weather(city, units)
+                # Fetch forecast only if current weather succeeds
+                try:
+                    forecast = get_forecast(city, units)
+                except Exception as forecast_error:
+                    # Log forecast error but don't stop app - current weather still shows
+                    print(f"Forecast error: {forecast_error}")
+                    forecast = None
             except requests.RequestException:
                 error = "Weather service is unavailable right now. Please try again later."
             except ValueError as exc:
@@ -77,7 +146,7 @@ def index():
             except RuntimeError as exc:
                 error = str(exc)
 
-    return render_template("index.html", weather=weather, city=city, error=error, units=units)
+    return render_template("index.html", weather=weather, forecast=forecast, city=city, error=error, units=units)
 
 
 if __name__ == "__main__":

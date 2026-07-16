@@ -62,6 +62,26 @@
               </div>
             </div>
           </article>
+
+          {% if forecast %}
+            <article class="forecast-section">
+              <p class="eyebrow">5-day forecast</p>
+              <div class="forecast-grid">
+                {% for day in forecast %}
+                  <div class="forecast-card">
+                    <p class="forecast-date">{{ day.date }}</p>
+                    <img class="forecast-icon" src="https://openweathermap.org/img/wn/{{ day.icon }}@2x.png" alt="{{ day.condition }}">
+                    <p class="forecast-condition">{{ day.condition }}</p>
+                    <div class="forecast-temps">
+                      <span class="temp-high">{{ day.high_temp }}{{ weather.unit_symbol }}</span>
+                      <span class="temp-low">{{ day.low_temp }}{{ weather.unit_symbol }}</span>
+                    </div>
+                    <p class="forecast-precipitation">↓ {{ day.precipitation }}%</p>
+                  </div>
+                {% endfor %}
+              </div>
+            </article>
+          {% endif %}
         {% endif %}
       </section>
     </main>
